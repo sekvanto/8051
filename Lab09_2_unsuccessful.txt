@@ -1,0 +1,124 @@
+//; Assuming the microcontroller's crystal is 11.0592 MHz
+//; Timer 0 in mode 1 (16-bit timer mode)
+//; Timer needs to be reloaded with 65536 - 921 = 64615 = 0xFC77 for 1ms tick
+//TIMER0_RELOAD_HIGH EQU 0xFC
+//TIMER0_RELOAD_LOW EQU 0x77
+//
+//; Define the initial delay and the maximum delay
+//DELAY_OFFSET EQU R1 
+//MAX_DELAY EQU 77   ; Adjust this value to match the time for a full rotation
+//
+//; Define a counter for the milliseconds
+//MS_COUNTER EQU R3  ; R3 is used to count milliseconds
+//
+//ORG     0000H
+//JMP     START
+//
+//ORG 000BH ; Timer 0 interrupt vector
+//LJMP TIMER0_ISR
+//
+//START:
+//; Timer 0 setup
+//SETB    EA     ; Enable global interrupts
+//SETB    ET0    ; Enable Timer 0 interrupt
+//MOV     TMOD, #01H  ; Timer 0 mode 1 (16-bit timer)
+//MOV     TH0, TIMER0_RELOAD_HIGH
+//MOV     TL0, TIMER0_RELOAD_LOW
+//SETB    TR0    ; Start Timer 0
+//
+//MAIN:
+//MOV     DPTR, #TABLE
+//MOV     R0, #0
+//JB     P3.2, MAIN  ; Wait here until the Hall effect sensor is triggered
+//
+//; Once triggered, increment the delay offset
+//INC     DELAY_OFFSET       ; Increment the delay offset
+//CJNE    DELAY_OFFSET, #MAX_DELAY, NO_RESET
+//MOV     DELAY_OFFSET, #0
+//NO_RESET:
+//CALL    WAIT  ; Insert a delay before starting the display loop
+//
+//LOOP:
+//MOV     A, R0
+//MOVC    A, @A+DPTR
+//MOV     P2, A
+//INC     R0
+//MOV     A, R0
+//MOVC    A, @A+DPTR
+//MOV     0C0H, A
+//INC     R0
+//CALL    DELAY
+//
+//CJNE    R0, #96, LOOP
+//JMP     MAIN
+//
+//WAIT:   ; Wait routine that introduces the delay based on DELAY_OFFSET
+//MOV     A, DELAY_OFFSET
+//MOV     R4, A
+//WAIT_LOOP:
+//ACALL 	LDELAY
+//DJNZ    R4, WAIT_LOOP
+//RET
+//
+//;=========Delay time for image or word leave on the screen==========
+//DELAY:
+//MOV     R7, #10
+//DELAY1:
+//MOV     R6, #40
+//DELAY2:
+//DJNZ    R6, DELAY2
+//DJNZ    R7, DELAY1
+//RET
+//
+//LDELAY:
+//MOV     R7, #050H
+//LDELAY1:
+//MOV     R6, #010H
+//LDELAY2:
+//DJNZ    R6, LDELAY2
+//DJNZ    R7, LDELAY1
+//RET
+//
+//TIMER0_ISR:
+//PUSH    ACC    ; Save Accumulator
+//PUSH    B      ; Save B register if used in your interrupt
+//MOV     TH0, TIMER0_RELOAD_HIGH ; Reload Timer 0 high byte
+//MOV     TL0, TIMER0_RELOAD_LOW  ; Reload Timer 0 low byte
+//
+//; Increment the ms counter
+//INC     MS_COUNTER
+//CJNE    MS_COUNTER, #100, SKIP_INCREMENT  ; Adjust this value to match the update rate
+//MOV     MS_COUNTER, #0
+//INC     R4
+//CJNE    R4, #MAX_DELAY, TIMER0_END
+//MOV     R4, #0
+//TIMER0_END:
+//POP     B      ; Restore B register
+//POP     ACC    ; Restore Accumulator
+//RETI           ; Return from interrupt
+//
+//SKIP_INCREMENT:
+//POP     B      ; Restore B register
+//POP     ACC    ; Restore Accumulator
+//RETI           ; Return from interrupt
+//
+//;=========================???TABLE=================
+//;?
+//TABLE:
+//DB 0FFH,07FH,0C1H,0BFH,0DDH,0CFH,05DH,0F0H
+//DB 0DDH,0BDH,0DDH,07DH,0DDH,0BDH,0C1H,0C1H
+//DB 0FFH,0FFH,0FFH,0FFH,007H,0F0H,0FFH,0BFH
+//DB 0FFH,07FH,000H,080H,0FFH,0FFH,0FFH,0FFH
+//;?
+//DB 0DFH,0FFH,0E7H,0FFH,0F7H,003H,015H,0AAH
+//DB 0D3H,0AAH,0D7H,0AAH,0D7H,0AAH,0D0H,082H
+//DB 0D7H,0AAH,0D7H,0AAH,0D3H,0AAH,015H,0AAH
+//DB 0F7H,003H,0D7H,0FFH,0E7H,0FFH,0FFH,0FFH
+//
+//;?
+//DB 0DFH,0FFH,0DBH,0F7H,0DBH,0B7H,0DBH,07BH
+//DB 001H,080H,0DCH,0FDH,0DDH,0BEH,0DFH,0BFH
+//DB 0DFH,0DFH,000H,0ECH,0DFH,0F3H,0DDH,0EBH
+//DB 0D3H,0DDH,05FH,0BEH,0DFH,007H,0FFH,0FFH
+//
+//END

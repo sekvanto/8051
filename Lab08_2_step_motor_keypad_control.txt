@@ -1,0 +1,273 @@
+ORG	0000H
+JMP	START
+ORG	0050H
+
+; R0: Rotation counter (FF->0)
+; R1: Buffer rotation sequence for p1-2
+; R2: Row
+; R3: Angle multiplier
+; R4: Delay extension
+; R5: Delay
+; R6: Delay
+; R7: Delay
+
+START:
+LOOP:
+	MOV P1,#11111110B
+	MOV R2,#0 ;ROW	
+SCAN:
+	MOV A,P2	; Scan the keyboard
+	ANL	A,#0FH	; Get bits 0-3
+	CJNE A,#0FH,OUT1 ; If press
+					 ; detected, jump
+
+	MOV	A,P1	; Rotate scanning
+				; output
+	RL	A
+	MOV	P1,A
+	INC	R2		; Increment row
+				; after rotating
+	CJNE R2,#4,SCAN
+	SJMP LOOP
+
+; Press detected during the scan
+OUT1:
+	ACALL DELAY
+	MOV	A,P2
+	ANL	A,#0FH	; Get lower 4 bits
+	CJNE A,#0FH,OUT2 ; If press
+					 ; detected, jump
+	SJMP LOOP
+
+; Process keyboard press
+OUT2:
+	MOV	DPTR,#IDXCOL ; Index table
+	MOVC A,@A+DPTR
+	MOV B,A	; Copy ACC to BCC
+	MOV A,R2 ; Copy ROW to ACC
+	CLR C ; Clear carry
+	RLC A ; Rotate left accumulator
+	CLR C ; Clear carry
+	RLC A ; After 2x rotating the row:
+	ADD A,B	; Add bcc to acc
+
+	; ACC has the index we calculated
+	MOV B,A
+	MOV DPTR,#EXCITATION
+	MOVC A,@A+DPTR
+
+	CJNE A,#1,METHOD_CHECK1
+	MOV A,B
+	JMP	PHASE1
+METHOD_CHECK1:
+	CJNE A,#2,METHOD_CHECK2
+	MOV A,B
+	JMP PHASE2
+METHOD_CHECK2:
+	MOV A,B
+	JMP PHASE12
+
+; 1 phase excitation
+PHASE1:
+	MOV B,A
+	; Calculate angle
+	MOV DPTR,#ANGLE_MULTIPLIER
+	MOVC A,@A+DPTR
+	MOV R3,A ; R3 has angle multiplier
+	MOV A,B
+	; Check whether the button index >7
+	ANL A,#08H
+	CJNE A,#0,LEFT1 ; >7, rotate left
+	; Rotate right
+RIGHT1:
+	MOV A,B
+	MOV P0,#00010001B
+	MOV R0,#0FFH	
+LOOPR1:
+	MOV A,P0
+	RL A	; One step
+	MOV P0,A
+	ACALL DELAY
+	
+	DJNZ R0,LOOPR1
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPR1		
+
+	AJMP LOOP
+
+LEFT1:
+	MOV A,B
+	MOV P0,#00010001B
+	MOV R0,#0FFH
+LOOPL1:
+	MOV A,P0
+	RR A	; One step
+	MOV P0,A
+	ACALL DELAY
+
+	DJNZ R0,LOOPL1
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPL1
+
+	AJMP LOOP
+
+; phase 2 excitation
+PHASE2:
+	MOV B,A
+	; Calculate angle
+	MOV DPTR,#ANGLE_MULTIPLIER
+	MOVC A,@A+DPTR
+	MOV R3,A ; R3 has angle multiplier
+	MOV A,B
+	; Check whether the button index >7
+	ANL A,#08H
+	CJNE A,#0,LEFT2 ; >7, rotate left
+	; Rotate right
+RIGHT2:
+	MOV A,B
+	MOV P0,#00110011B
+	MOV R0,#0FFH	
+LOOPR2:
+	MOV A,P0
+	RL A	; One step
+	MOV P0,A
+MOV R4,#03H
+; Longer delay for phase 2 is needed
+DELAY_EXT:
+	ACALL DELAY
+	DJNZ R4,DELAY_EXT
+	
+	DJNZ R0,LOOPR2
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPR2		
+
+	AJMP LOOP
+
+LEFT2:
+	MOV A,B
+	MOV P0,#00110011B
+	MOV R0,#0FFH
+LOOPL2:
+	MOV A,P0
+	RR A	; One step
+	MOV P0,A
+MOV R4,#03H
+; Longer delay for phase 2 is needed
+DELAY_EXT1:
+	ACALL DELAY
+	DJNZ R4,DELAY_EXT1
+
+	DJNZ R0,LOOPL2
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPL2
+
+	AJMP LOOP
+
+PHASE12:
+	MOV B,A
+	; Calculate angle
+	MOV DPTR,#ANGLE_MULTIPLIER
+	MOVC A,@A+DPTR
+	MOV R3,A ; R3 has angle multiplier
+	MOV A,B
+	; Check whether the button index >7
+	ANL A,#08H
+	CJNE A,#0,LEFT12 ; >7, rotate left
+	; Rotate right
+RIGHT12:
+	MOV A,B
+	MOV P0,#00010001B
+	MOV R1,#00110011B
+	MOV R0,#0FFH	
+LOOPR12:
+	MOV A,P0
+	RL A	; One step
+	; Swap with buffer
+	MOV P0,R1
+	MOV R1,A
+MOV R4,#01H
+; Longer delay
+DELAY_EXT11:
+	ACALL DELAY
+	DJNZ R4,DELAY_EXT11
+	
+	DJNZ R0,LOOPR12
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPR12		
+
+	AJMP LOOP
+
+LEFT12:
+	MOV A,B
+	MOV P0,#00010001B
+	MOV R1,#10011001B
+	MOV R0,#0FFH
+LOOPL12:
+	MOV A,P0
+	RR A	; One step
+	; Swap with the buffer
+	MOV P0,R1
+	MOV R1,A
+MOV R4,#01H
+; Longer delay
+DELAY_EXT12:
+	ACALL DELAY
+	DJNZ R4,DELAY_EXT12
+
+	DJNZ R0,LOOPL12
+	DEC R3 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R3,#0,LOOPL12
+
+	AJMP LOOP
+
+; P2: four bits
+; IDXCOL: returns position of the
+; first rightmost 0
+IDXCOL:
+	DB	0	; 000(0)
+	DB	1	; 00(0)1
+	DB	0	; 001(0)
+	DB	2	; 0(0)11
+	DB	0	; 010(0)
+	DB	1	; 01(0)1
+	DB	0	; 011(0)
+	DB	3	; (0)111
+	DB	0	; 100(0)
+	DB	1	; 10(0)1
+	DB	0	; 101(0)
+	DB	2	; 1(0)11
+	DB	0	; 110(0)
+	DB	1	; 11(0)1
+	DB	0	; 111(0)
+
+; Excitation method for each button
+; 1 => 1 phase, 2 => 2 phase, 
+; 3 => 1-2 phase
+EXCITATION:
+DB 1,3,2,1,3,3,2,1,1,3,2,1,3,3,2,1
+
+; 1 => 45*1 degrees
+; 2 => 45*2 degrees = 90 degrees
+; and so on
+; twice for 1-2
+ANGLE_MULTIPLIER:
+DB 4,6,2,1,16,14,6,5,4,6,2,1,16,14,6,5
+
+DELAY:
+	MOV	R5,#0FH
+DELAY1:
+	MOV	R6,#0FH
+DELAY2:
+	MOV R7,#01FH
+DELAY3:
+	DJNZ R7,DELAY3
+	DJNZ R6,DELAY2
+	DJNZ R5,DELAY1
+	RET
+END

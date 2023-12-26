@@ -1,0 +1,99 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+	MOV R2,#0	; R2: current digit index (left/right)
+
+	MOV	R0,#0	; R0: right digit counter
+	MOV R1,#5	; R1: left digit counter
+
+	;These three variables are the only variables
+	;responsible for the interval of each second.
+	;Therefore, we must modify these variables to make
+	;the interval as close to 1 second as possible
+
+	;We should also not forget that each loop
+	;has many instructions and each of these instructions
+	;takes some extra time, which lengthens the loop.
+
+	MOV R5,#0FFH
+	MOV R6,#0E5H
+	MOV R7,#006H 
+
+	AJMP LOOP
+
+NEXTNUMBER:	
+	MOV R5,#0FFH
+	INC R0
+	;Check whether the counter is at 61
+	CJNE R0,#1,AFTER61CHECK
+	CJNE R1,#6,AFTER61CHECK
+	;The counter is at 61 so change it to 01
+	MOV R1,#0
+	AJMP NEXTNUMBER1
+AFTER61CHECK:
+	CJNE R0,#10,NEXTNUMBER1	; if R0 <> 10, jmp	
+	MOV R0,#0
+	INC R1
+NEXTNUMBER1:
+	MOV R6,#0E5H
+NEXTNUMBER2:
+	MOV R7,#006H
+
+LOOP:
+	CJNE R2,#2,R2ZERO
+	MOV R2,#0
+R2ZERO:
+	CJNE R2,#0,DISPLAYLEFT
+	AJMP DISPLAYRIGHT
+
+DISPLAYRIGHT:
+	MOV P1,#0FFH   ; Disable display for a brief moment
+
+	MOV	DPTR,#SSTABLE
+	MOV A,R0	; LSB, digit xxxD
+	MOVC A,@A+DPTR
+	MOV	P0,A
+	INC R2
+
+	MOV P1,#0F7H	; Enable digit xxxD
+
+	AJMP ENDDISPLAY
+
+	;-------------------------------
+
+DISPLAYLEFT:
+	MOV P1,#0FFH
+
+	MOV	DPTR,#SSTABLE
+	MOV A,R1	; digit xxDx
+	MOVC A,@A+DPTR
+	MOV	P0,A
+	INC R2
+
+	MOV P1,#0FBH
+
+	AJMP ENDDISPLAY
+
+	;-------------------------------
+
+ENDDISPLAY:
+	DJNZ R7,LOOP
+	DJNZ R6,NEXTNUMBER2
+	DJNZ R5,NEXTNUMBER1
+	AJMP NEXTNUMBER
+
+SSTABLE:
+	DB	0C0H	;0
+	DB	0F9H	;1
+	DB	0A4H	;2
+	DB	0B0H	;3
+	DB	099H	;4
+	DB	092H	;5
+	DB	082H	;6
+	DB	0F8H	;7
+	DB	080H	;8
+	DB	090H	;9
+
+END

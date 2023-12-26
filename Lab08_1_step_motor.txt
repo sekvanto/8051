@@ -1,0 +1,62 @@
+ORG	0000H
+JMP	START
+ORG	0050H
+
+START:
+	MOV P0,#00010001B
+	MOV R0,#0FFH
+	MOV	R1,#2 ; 511 ~= 255 * 2
+	; Each step is 0.176°
+	; According to datasheet
+	; for 90° 511 steps are needed
+LOOP:
+	MOV A,P0
+	RR A	; One step
+	MOV P0,A
+	ACALL DELAY			
+
+	DJNZ R0,LOOP
+	DEC R1 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R1,#0,LOOP
+
+; First part of the program is done
+SECOND_MOVE:
+	MOV R0,#0FFH
+	MOV R1,#4 ; this time, 180°=90°*2
+
+	; Start with a longer delay
+	; Between two parts of the program
+MOV R4,#0FFH
+LONGER_DELAY:
+	ACALL DELAY
+	DJNZ R4,LONGER_DELAY
+
+LOOP1:
+	MOV A,P0
+	RL A	; One step
+	MOV P0,A
+	ACALL DELAY
+
+	DJNZ R0,LOOP1
+	DEC R1 ; 255 steps are done
+	MOV R0,#0FFH
+	CJNE R1,#0,LOOP1
+; This point is reached if R1 = 0
+; So the full 180° rotation is complete		
+
+ENDLOOP: ; Endless loop
+	SJMP $
+
+DELAY:
+	MOV	R5,#0FH
+DELAY1:
+	MOV	R6,#0FH
+DELAY2:
+	MOV R7,#01FH
+DELAY3:
+	DJNZ R7,DELAY3
+	DJNZ R6,DELAY2
+	DJNZ R5,DELAY1
+	RET
+END

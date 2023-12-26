@@ -1,0 +1,83 @@
+ORG	0000H
+JMP	START
+ORG	0050H
+
+START:
+	; pointer to the 111511303 text					
+	MOV	DPTR,#MSG
+	
+	;5ms
+	;waiting for the LCD to turn on
+	MOV	R5,#0FAH
+	CALL DELAY
+	
+	;Settings:
+	;8-bit data access
+	;2 columns
+	;5x7 characters
+	MOV	A,#00111011B							
+	CALL COMMAND
+
+	;Turn on the display
+	;no cursor blinking				
+	MOV	A,#00001110B	
+	CALL COMMAND
+	
+	;Clear the screen	
+	MOV	A,#00000001B		
+	CALL COMMAND
+	
+	;2ms delay
+	MOV	R5,#00FFH		
+	CALL DELAY
+	
+	;DD RAM address = 0
+	MOV	A,#10000000B		
+	CALL COMMAND
+
+LOOP:			
+	CLR	A
+	MOVC A,@A+DPTR ;next character
+	JZ ENDMES ;endless loop when end
+	CALL SDATA			
+	INC	DPTR					
+	JMP	LOOP
+
+ENDMES:
+	SJMP $
+
+COMMAND:	      
+	MOV	P2,A ; Command data			
+	MOV	P1,#00000100B ;E=1,RW=0,RS=0
+	CALL DELAY			
+	MOV	P1,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#2H ; Short delay				
+	CALL DELAY
+	RET
+
+SDATA:		
+	MOV	P2,A
+	MOV	P1,#00000101B ;E=1,RW=0,RS=1
+	CALL DELAY
+	MOV	P1,#00000001B ;E=0,RW=0,RS=1
+	MOV	P1,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#0FAH ;5ms
+	MOV	R3,#019H
+WAIT:
+	CALL DELAY
+	DJNZ R3,WAIT
+	RET
+
+DELAY:
+	MOV	R6,#02H
+DELAY1:
+	MOV	R7,#05H
+DELAY2:
+	DJNZ	R7,DELAY2
+	DJNZ	R6,DELAY1
+	DJNZ	R5,DELAY
+	RET
+
+MSG:
+	DB	"111511303",0
+END

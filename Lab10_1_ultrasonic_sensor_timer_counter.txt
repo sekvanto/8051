@@ -1,0 +1,125 @@
+; 1. DIP switch is a trigger for a 10uS signal
+; 2. When Echo goes low, the Counter value is retrieved and displayed
+
+	ORG   00H
+	JMP   INITIAL
+  ORG   0BH       ; Timer 0 interrupt
+  AJMP  TIMER0INT 
+  ORG   013H      ; INT1 interrupt, P3.3, Echo
+  AJMP  EXTERNAL1
+  ORG   50H
+
+  ECHO          EQU P3.3
+  TRIG          EQU P3.6
+  DIP_SWITCH    EQU P3.7
+  DIGIT_CHOOSE  EQU P0          ; P0.0-3
+  DIGIT_OUT     EQU P2
+  SQUARE_WAVE   EQU P1.0        ; Clock, connected to Timer2
+
+  FIRST_DIGIT   EQU R0
+  SECOND_DIGIT  EQU R1
+  THIRD_DIGIT   EQU R2
+INITIAL:
+  MOV   DIGIT_CHOOSE,#0FFH
+  MOV   DIGIT_OUT,#0FFH
+  MOV	  DPTR,#SSTABLE
+  ; Timers/Interrupts setup
+  MOV 	TMOD,#11100010B       ; Timer 1, Gate (int-enabled), C/-T: Counter mode, auto-reload
+  MOV 	TL0,#227	      ; Timer 0, auto-reload
+  MOV 	TH0,#227              ; Auto-reloads with 227
+  SETB	TR0                   ; Timer 1 run control bit
+  MOV   TL1,#0                ; Count, starts with 0
+  MOV   TH1,#0                ; Count, starts with 0
+  SETB  TR1                   ; Timer 1 run control bit
+  ; Interrupt enable register
+  MOV   IE,#10000110B         ; EA (enable all), -, ET2, ES, ET1, EX1 = 1, ET0 = 1 (Timer 0 int), EX0
+  ; Interrupt priority register
+  MOV   IP,#04H               ; PX1, EXT1 priority bit set to 1
+  ; Timer/Counter Control Register
+  CLR   TF0                   ; Timer 0 overflow flag
+  CLR   TF1                   ; Timer 1 overflow flag
+  SETB  IT1                   ; INT1 falling edge trigger
+  CLR   SQUARE_WAVE
+MAIN:
+	JB    DIP_SWITCH,PULSE      ; Pulse detected
+	AJMP  MAIN
+PULSE:
+  SETB  TRIG                  ; 10uS trigger pulse
+  ACALL DELAY10US
+  CLR   TRIG
+WAIT_FOR_ECHO:
+  JNB   ECHO,WAIT_FOR_ECHO
+  CALL  DELAY
+DEBOUNCE:
+  JB    DIP_SWITCH,DISPLAY   ; If the DIP switch is still active, stay in the loop
+  JMP   MAIN
+DISPLAY:
+  MOV   A,FIRST_DIGIT
+  MOVC  A,@A+DPTR
+	MOV	  DIGIT_OUT,A	
+	CLR	  P0.1
+	CALL	DELAY
+	SETB	P0.1
+  MOV   A,SECOND_DIGIT
+  MOVC  A,@A+DPTR
+	MOV	  DIGIT_OUT,A
+	CLR	  P0.2
+	CALL	DELAY
+	SETB	P0.2
+  MOV   A,THIRD_DIGIT
+  MOVC  A,@A+DPTR
+	MOV	  DIGIT_OUT,A
+	CLR	  P0.3
+	CALL	DELAY
+	SETB	P0.3
+	JMP	  DEBOUNCE
+TIMER0INT:
+  CPL   SQUARE_WAVE   ; Generate square wave clock pulse
+  CLR   TF0
+  RETI
+EXTERNAL1:
+  MOV   A,TL1     ; Timer 1 lower 8 bits
+  MOV   B,#100
+  DIV   AB        ; B has the remainder
+  MOV   FIRST_DIGIT,A
+  MOV   A,B
+  MOV   B,#10
+  DIV   AB
+  MOV   SECOND_DIGIT,A
+  MOV   A,B
+  MOV   THIRD_DIGIT,A
+  CLR	  TF1
+	MOV	  TH1,#0	
+	MOV	  TL1,#0
+  RETI
+DELAY10US:	;@12MHz
+	NOP
+	NOP
+	NOP
+	NOP
+	PUSH  30H
+	MOV   30H,#20
+NEXT:
+	DJNZ  30H,NEXT
+	POP   30H
+	RET
+DELAY:
+  MOV	  R6,#2AH	 
+DELAY1:
+	MOV	  R7,#1FH
+DELAY2:
+	DJNZ	R7,DELAY2
+	DJNZ	R6,DELAY1
+	RET
+SSTABLE:
+  DB	0C0H	;0
+	DB	0F9H	;1
+	DB	0A4H	;2
+	DB	0B0H	;3
+	DB	099H	;4
+	DB	092H	;5
+	DB	082H	;6
+	DB	0F8H	;7
+	DB	080H	;8
+  DB	090H	;9
+END

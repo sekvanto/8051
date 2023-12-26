@@ -1,0 +1,169 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+; ROW is R2
+MOV R3,#0 ; Index of current column
+		  ; 0 <= R3 <= 4
+MOV R1,#10H ; Current column output
+START:
+	MOV P0,#0
+LOOP1:
+	MOV P1,#11111110B
+	MOV R2,#0 ;ROW
+NEXT1:
+	MOV A,P2	; Scan the keyboard
+	ANL	A,#0FH	; Get bits 0-3
+	CJNE A,#0FH,OUT1 ; If press
+					 ; detected, jump
+	; Nothing detected:
+	MOV P0,#0  ; Blank display
+
+	MOV	A,P1	; Rotate scanning
+				; output
+	RL	A
+	MOV	P1,A
+	INC	R2		; Increment row
+				; after rotating
+	CJNE R2,#4,NEXT1
+
+	SJMP LOOP1
+
+; Press detected during the scan
+OUT1:
+	ACALL DELAY
+	MOV	A,P2
+	ANL	A,#0FH	; Get lower 4 bits
+	CJNE A,#0FH,OUT2 ; If press
+					 ; detected, jump
+
+	SJMP LOOP1
+
+; Process keyboard press
+OUT2:
+	MOV	DPTR,#IDXCOL ; Index table
+	MOVC A,@A+DPTR
+	MOV B,A	; Copy ACC to BCC
+	MOV A,R2 ; Copy ROW to ACC
+	CLR C ; Clear carry
+	RLC A ; Rotate left accumulator
+	CLR C ; Clear carry
+	RLC A ; After 2x rotating the row:
+	ADD A,B	; Add bcc to acc
+
+	; ACC has the index we calculated	
+	; if ACC >= 4, ignore
+CHECKLIM1:
+	CJNE A,#0,CHECKLIM2
+	MOV DPTR,#TABLE ; first animation
+	AJMP DISPLAYANIM
+CHECKLIM2:
+	CJNE A,#1,CHECKLIM3
+	MOV DPTR,#TABLE2
+	AJMP DISPLAYANIM
+CHECKLIM3:
+	CJNE A,#2,CHECKLIM4
+	MOV DPTR,#TABLE3
+	AJMP DISPLAYANIM
+CHECKLIM4:
+	CJNE A,#3,NEXT1
+	MOV DPTR,#TABLE4	
+
+DISPLAYANIM:
+	MOV P3,#00H
+	MOV A,R3
+	MOVC A,@A+DPTR
+	MOV P0,A ; Display
+	MOV P3,R1
+	INC R3
+
+	MOV A,R1
+	RR A
+	MOV R1,A
+	CALL DELAY_5_7
+	CJNE R3,#5,DISPLAYANIM
+	MOV R3,#0
+	MOV R1,#10H
+
+LOOP2:
+	MOV A,P2
+	ANL A,#0FH
+	CJNE A,#0FH,DISPLAYANIM ; press,
+				; Stay in this loop
+	ACALL DELAY	; Press not detected,
+				; wait
+
+	MOV A,P2
+	ANL A,#0FH	; Check again
+	CJNE A,#0FH,DISPLAYANIM
+
+	SJMP LOOP1 ; Back to loop 1
+
+; P2: four bits
+; IDXCOL: returns position of the
+; first rightmost 0
+IDXCOL:
+	DB	0	; 000(0)
+	DB	1	; 00(0)1
+	DB	0	; 001(0)
+	DB	2	; 0(0)11
+	DB	0	; 010(0)
+	DB	1	; 01(0)1
+	DB	0	; 011(0)
+	DB	3	; (0)111
+	DB	0	; 100(0)
+	DB	1	; 10(0)1
+	DB	0	; 101(0)
+	DB	2	; 1(0)11
+	DB	0	; 110(0)
+	DB	1	; 11(0)1
+	DB	0	; 111(0)
+
+TABLE:
+	DB 12H
+	DB 14H
+	DB 78H
+	DB 14H
+	DB 12H
+
+TABLE2:
+	DB 38H
+	DB 28H
+	DB 7FH
+	DB 28H
+	DB 38H
+
+TABLE3:
+ 	DB 04H
+	DB 09H
+	DB 7FH
+	DB 08H
+	DB 04H
+
+TABLE4:
+	DB 02H
+	DB 39H
+	DB 01H
+	DB 39H
+	DB 02H
+
+DELAY:
+	MOV R6,#03H
+DELAY1:
+	MOV R7,#03H
+DELAY2:
+	DJNZ R7,DELAY2
+	DJNZ R6,DELAY1
+RET
+
+DELAY_5_7:
+	MOV R4,#20
+DELAY_5_7_1:
+	MOV R5,#25
+DELAY_5_7_2:
+	DJNZ R5,DELAY_5_7_2
+	DJNZ R4,DELAY_5_7_1
+RET
+
+END

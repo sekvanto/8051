@@ -1,0 +1,23 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+LOOP:
+  MOV A,P0			// Read input at P0 and move it to ACC
+  MOV P1,A			// Redirect this input to P1 to turn on/off LED
+  ACALL DELAY		// Delay
+  JMP LOOP
+    
+DELAY:
+  MOV R5,#001H
+DELAY1:
+  MOV R6,#001H
+DELAY2:
+  MOV R7,#001H
+DELAY3:
+  DJNZ R7,DELAY3
+  DJNZ R6,DELAY2
+  DJNZ R5,DELAY1
+RET
+END

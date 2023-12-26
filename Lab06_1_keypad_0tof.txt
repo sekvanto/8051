@@ -1,0 +1,122 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+; ROW is R2
+MOV P3,#0F7H ; 7-segment display choose
+
+START:
+	MOV P0,#0	;LED
+LOOP1:
+	MOV P1,#11111110B
+	MOV R2,#0 ;ROW
+NEXT1:
+	MOV A,P2	; Scan the keyboard
+	ANL	A,#0FH	; Get bits 0-3
+	CJNE A,#0FH,OUT1 ; If press
+					 ; detected, jump
+	; Nothing detected:
+	MOV P0,#0FFH  ; Blank display
+
+	MOV	A,P1	; Rotate scanning
+				; output
+	RL	A
+	MOV	P1,A
+	INC	R2		; Increment row
+				; after rotating
+	CJNE R2,#4,NEXT1
+
+	SJMP LOOP1
+
+; Press detected during the scan
+OUT1:
+	ACALL DELAY
+	MOV	A,P2
+	ANL	A,#0FH	; Get lower 4 bits
+	CJNE A,#0FH,OUT2 ; If press
+					 ; detected, jump
+
+	SJMP LOOP1
+
+; Process keyboard press
+OUT2:
+	MOV	DPTR,#IDXCOL ; Index table
+	MOVC A,@A+DPTR
+	MOV B,A	; Copy ACC to BCC
+	MOV A,R2 ; Copy ROW to ACC
+	CLR C ; Clear carry
+	RLC A ; Rotate left accumulator
+	CLR C ; Clear carry
+	RLC A ; After 2x rotating the row:
+	ADD A,B	; Add bcc to acc
+
+	; ACC has the index we calculated	
+	MOV DPTR,#SSTABLE
+	MOVC A,@A+DPTR
+	MOV P0,A ; Display
+
+LOOP2:
+	MOV A,P2
+	ANL A,#0FH
+	CJNE A,#0FH,LOOP2 ; No press,
+				; Stay in this loop
+	ACALL DELAY	; Press detected,
+				; wait
+
+	MOV A,P2
+	ANL A,#0FH	; Check again
+	CJNE A,#0FH,LOOP2
+
+	SJMP LOOP1 ; Back to loop 1
+
+; P2: four bits
+; IDXCOL: returns position of the
+; first rightmost 0
+IDXCOL:
+	DB	0	; 000(0)
+	DB	1	; 00(0)1
+	DB	0	; 001(0)
+	DB	2	; 0(0)11
+	DB	0	; 010(0)
+	DB	1	; 01(0)1
+	DB	0	; 011(0)
+	DB	3	; (0)111
+	DB	0	; 100(0)
+	DB	1	; 10(0)1
+	DB	0	; 101(0)
+	DB	2	; 1(0)11
+	DB	0	; 110(0)
+	DB	1	; 11(0)1
+	DB	0	; 111(0)
+
+SSTABLE:
+	DB	00001101B	;3
+	DB	00100101B	;2
+	DB	10011111B	;1
+	DB	00000011B	;0
+
+	DB	00011111B	;7
+	DB	01000001B	;6
+	DB	01001001B	;5
+	DB	10011001B	;4
+
+	DB	11000001B	;b
+	DB	00010001B	;A
+	DB	00001001B   ;9
+	DB	00000001B	;8
+
+	DB	01110001B	;F
+	DB	01100001B	;E
+	DB	10000101B	;d
+	DB	01100011B	;C
+
+DELAY:
+	MOV R6,#03H
+DELAY1:
+	MOV R7,#03H
+DELAY2:
+	DJNZ R7,DELAY2
+	DJNZ R6,DELAY1
+RET
+END

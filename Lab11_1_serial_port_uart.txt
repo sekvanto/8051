@@ -1,0 +1,46 @@
+  ORG 00H
+  JMP MAIN
+  ORG 23H
+  JMP RECEIVE
+  ORG 50H
+
+  CHAR  EQU R0
+  READY EQU R1
+
+MAIN:
+  MOV   CHAR,#0
+  MOV   READY,#0
+
+  SETB  ES              ; Serial Port Interrupt
+  CLR   TI
+  CLR   RI
+  SETB  EA
+  SETB  PS              ; Priority
+
+  MOV   TMOD,#00100000B ; Timer 1, Mode 2
+  MOV   TL1,#0E6H       ; Baud rate=2400
+  MOV   TH1,#0E6H
+  ORL   PCON,#80H       ; SMOD=1
+  SETB  TR1             ; Timer Run
+
+  CLR   SM0
+  SETB  SM1             ; Serial Port Mode 1
+  CLR   SM2
+  SETB  REN             ; Receive Enable
+LOOP:
+  CJNE  READY,#1,LOOP
+  CLR   TI
+  MOV   SBUF,CHAR
+  MOV   READY,#0
+  JNB   TI,$
+  JMP   LOOP
+RECEIVE:
+  JNB   RI,RX_END
+  CLR   RI
+  MOV   A,SBUF
+  ADD   A,#32
+  MOV   CHAR,A
+  MOV   READY,#1
+RX_END:
+  RETI
+END

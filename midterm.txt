@@ -1,0 +1,438 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+	MOV 30H,#0	;init state
+	MOV 31H,#0	;reset state
+	MOV 32H,#0	;in DOG mode
+	MOV 33H,#0	;digit mode
+
+	;5ms
+	;waiting for the LCD to turn on
+	MOV	R5,#0FAH
+	CALL ADELAY
+	
+	;Settings:
+	;8-bit data access
+	;2 columns
+	;5x7 characters
+	MOV	A,#00111011B							
+	CALL COMMAND
+
+	;Turn on the display
+	;no cursor blinking				
+	MOV	A,#00001110B	
+	CALL COMMAND
+	
+	;Clear the screen	
+	MOV	A,#00000001B		
+	CALL COMMAND
+	
+	;2ms delay
+	MOV	R5,#00FFH		
+	CALL ADELAY
+
+	;Write data to CG RAM
+	MOV	A,#01000000B		
+	CALL COMMAND
+	ACALL ADELAY
+
+	ACALL LOAD_ANIMATION
+
+	;DD RAM address = 0
+	MOV	A,#10000000B		
+	CALL COMMAND
+	ACALL ADELAY
+
+INIT_SCREEN:
+MOV 32H,#0
+; clear screen
+	MOV A,#00000001B
+	CALL COMMAND
+	MOV R5,#0AH
+	ACALL ADELAY
+
+	MOV R5,#0FFH
+	ACALL ADELAY
+	MOV	DPTR,#INIT_MSG
+	MOV 30H,#1 ;indicates initialization
+INIT_LOOP:
+	CLR	A
+	MOVC A,@A+DPTR ;next character
+	JZ  SCAN
+	CALL SDATA			
+	INC	DPTR					
+	JMP	INIT_LOOP
+
+ENDMES:
+	//SJMP $
+
+SCAN:
+START:
+MOV R1,#11111110B
+MOV R2,#0 ;ROW
+MOV R3,#0
+NEXT1:
+	MOV A,R1
+	MOV P1,A
+	MOV A,P1 ; Scan the keyboard
+	ANL	A,#0F0H	; Get bits 4-7
+	CJNE A,#0F0H,OUT1 ; If press
+					 ; detected, jump
+
+	MOV	A,R1	; Rotate scanning
+				; output
+	RL	A
+	MOV	R1,A
+	INC	R2		; Increment row
+				; after rotating
+	CJNE R2,#4,NEXT1
+
+	INC R3
+
+	//CJNE R3,#2,SCAN
+
+NO_RESET3:
+	MOV R0,32H ;in DOG mode
+	CJNE R0,#0,NO_RESET4
+	AJMP START
+NO_RESET4:
+	LJMP M2
+
+	SJMP SCAN
+
+; Press detected during the scan
+OUT1:
+	ACALL DELAY
+	MOV	A,P1
+	ANL	A,#0F0H	; Get higher 4 bits
+	CJNE A,#0F0H,OUT2 ; If press
+					 ; detected, jump
+	SJMP START
+
+; Process keyboard press
+OUT2:
+	RR A
+	RR A
+	RR A
+	RR A
+
+	MOV	DPTR,#IDXCOL ; Index table
+	MOVC A,@A+DPTR
+	MOV B,A	; Copy ACC to BCC
+	MOV A,R2 ; Copy ROW to ACC
+	CLR C ; Clear carry
+	RLC A ; Rotate left accumulator
+	CLR C ; Clear carry
+	RLC A ; After 2x rotating the row:
+	ADD A,B	; Add bcc to acc
+
+	; ACC has the index we calculated	
+	MOV R0,30H ;are we in init?(1=yes)
+	CJNE R0,#0,CHECK_MODE
+
+	MOV R0,31H ;are we waiting for reset?
+	CJNE R0,#0,CHECK_RESET ;31h=1 so yes
+	
+	MOV R0,33H ;is this digit mode
+	CJNE R0,#0,DIGIT_CHECK
+	
+	AJMP START
+CHECK_RESET:
+	CJNE A,#12,NO_RESET
+	AJMP INIT_SCREEN
+NO_RESET:
+	MOV R0,32H ;in DOG mode
+	CJNE R0,#0,NO_RESET2
+	AJMP START
+NO_RESET2:
+	LJMP END_RESET_WAIT
+
+CHECK_MODE:
+	CJNE A,#0,MCHECK1
+	JMP M4_ENTER
+MCHECK1:
+	CJNE A,#1,MCHECK2
+	JMP M3_ENTER
+MCHECK2:
+	CJNE A,#2,MCHECK3
+	JMP M2_ENTER
+MCHECK3:
+	CJNE A,#3,START
+	JMP M1_ENTER
+
+DIGIT_CHECK:
+	CJNE A,
+
+M1_ENTER:
+	MOV 30H,#0 ;no more init state
+	MOV 33H,#1 ;digit mode
+M1:
+	AJMP SCAN
+
+M2_ENTER:
+	MOV 30H,#0 ;no more init state
+M2:
+; displays DOG
+; clear screen
+	MOV A,#00000001B
+	CALL COMMAND
+	MOV R5,#0AH
+	ACALL ADELAY
+
+	MOV R5,#0FFH
+	ACALL ADELAY
+
+	;Short delay
+	MOV R5,#0FFH
+	CALL ADELAY
+
+	MOV A,#00000000B ; First character,
+					; loaded to 
+					; CG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL ADELAY
+
+	
+	ACALL LONG_DELAY
+
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay
+	MOV R5,#0FFH
+	CALL ADELAY
+
+
+	MOV A,#00000001B ;second
+				;character stored in 
+				;SG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL ADELAY				
+
+	
+	ACALL LONG_DELAY
+
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay 
+	MOV R5,#0FFH
+	CALL ADELAY
+	
+	MOV A,#00000010B ;third
+				;character stored in 
+				;SG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL ADELAY
+
+		
+	ACALL LONG_DELAY
+
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay 
+	MOV R5,#0FFH
+	CALL DELAY
+
+	MOV	32H,#1 ;in DOG mode
+	ACALL WAIT_FOR_RESET
+
+	AJMP M2
+
+M3_ENTER:
+	MOV 30H,#0 ;no more init state
+M3:
+M4_ENTER:
+	MOV 30H,#0 ;no more init state
+M4:
+	;screen test 
+
+
+LOOP2:
+	MOV A,P1
+	ANL A,#0F0H
+	CJNE A,#0F0H,LOOP2 ; press,
+				; Stay in this loop
+	ACALL DELAY	; Press not detected,
+				; wait
+
+	MOV A,P1
+	ANL A,#0F0H	; Check again
+	CJNE A,#0F0H,LOOP2
+
+	AJMP START ; Back to loop 1
+
+WAIT_FOR_RESET:
+	 MOV 31H,#1 ;indicates wait for reset
+	 AJMP SCAN
+END_RESET_WAIT:
+RET
+	//SJMP $
+
+;load animation to RAM
+LOAD_ANIMATION:
+ 	MOV DPTR,#ANIMATION
+	MOV R0,#48
+LOAD_ANIMATION1:
+	CLR A
+	MOVC A,@A+DPTR
+	CALL SDATA
+	MOV R5,#05FH
+	CALL DELAY
+	INC DPTR
+	DJNZ R0,LOAD_ANIMATION1
+RET	
+
+COMMAND:	      
+	MOV	P0,A ; Command data			
+	MOV	P3,#00000100B ;E=1,RW=0,RS=0
+	CALL ADELAY			
+	MOV	P3,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#2H ; Short delay				
+	CALL ADELAY
+	RET
+
+SDATA:		
+	MOV	P0,A
+	MOV	P3,#00000101B ;E=1,RW=0,RS=1
+	CALL ADELAY
+	MOV	P3,#00000001B ;E=0,RW=0,RS=1
+	MOV	P3,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#0FAH ;5ms
+	MOV	R3,#019H
+WAIT:
+	CALL ADELAY
+	DJNZ R3,WAIT
+	RET
+
+LONG_DELAY:
+	MOV R2,#07H
+LONG:
+	MOV	R3,#02FH
+	CALL WAIT
+	DJNZ R2,LONG
+	RET	
+
+ADELAY: //animation delay
+	MOV	R6,#02H
+ADELAY1:
+	MOV	R7,#05H
+ADELAY2:
+	DJNZ	R7,ADELAY2
+	DJNZ	R6,ADELAY1
+	DJNZ	R5,ADELAY
+	RET
+
+; P2: four bits
+; IDXCOL: returns position of the
+; first rightmost 0
+IDXCOL:
+	DB	0	; 000(0)
+	DB	1	; 00(0)1
+	DB	0	; 001(0)
+	DB	2	; 0(0)11
+	DB	0	; 010(0)
+	DB	1	; 01(0)1
+	DB	0	; 011(0)
+	DB	3	; (0)111
+	DB	0	; 100(0)
+	DB	1	; 10(0)1
+	DB	0	; 101(0)
+	DB	2	; 1(0)11
+	DB	0	; 110(0)
+	DB	1	; 11(0)1
+	DB	0	; 111(0)
+
+ANIMATION:
+		DB 	00000B
+		DB	11100B
+		DB	10010B
+		DB	10001B
+		DB	10001B
+		DB	10001B
+		DB	10010B
+		DB	11100B
+	
+ 		DB	00000B
+		DB	11111B
+		DB	10001B
+		DB	10001B
+		DB	10001B
+		DB	10001B
+		DB	10001B
+		DB	11111B
+
+ 		DB	00000B
+		DB	11111B
+		DB	10000B
+		DB	10000B
+		DB	10111B
+		DB	10001B
+		DB	10001B
+		DB	11111B
+
+		DB	00000B
+		DB	01110B
+		DB	11111B
+		DB	11100B
+		DB	11000B
+		DB	11100B
+		DB	11111B
+		DB	01110B
+
+		DB	00000B
+		DB	01100B
+		DB	11110B
+		DB	11111B
+		DB	11111B
+		DB	11111B
+		DB	11110B
+		DB	01100B
+
+		DB	00000B
+		DB	00000B
+		DB	00000B
+		DB 	00000B
+		DB 	00100B
+		DB	00000B
+		DB	00000B
+		DB 	00000B
+
+DELAY:
+	MOV R6,#03H
+DELAY1:
+	MOV R7,#03H
+DELAY2:
+	DJNZ R7,DELAY2
+	DJNZ R6,DELAY1
+RET
+
+DELAY_5_7:
+	MOV R4,#20
+DELAY_5_7_1:
+	MOV R5,#25
+DELAY_5_7_2:
+	DJNZ R5,DELAY_5_7_2
+	DJNZ R4,DELAY_5_7_1
+RET

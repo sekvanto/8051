@@ -1,0 +1,110 @@
+ORG 00H
+JMP START						  
+ORG 50H
+
+START:
+	MOV R5,#1H	; i display
+				; this value is 
+				; shifted LEFT
+				; each time the
+				; row increases (i++)
+
+	MOV R4,#10H	; current column in
+				; time sharing
+	MOV P2,#5	; index of current 
+				; column in time sharing
+
+	MOV R0,#1		; i <= 7, row
+	MOV	R1,#1		; j <= 5, column
+
+INIT:	; Delay registers
+		; for changing the i-j index
+	MOV R2,#0FH
+INITR3:
+	MOV R3,#0EH
+CHECKCHANGE:
+	DJNZ R3,DISPLAY
+	DJNZ R2,INITR3
+
+	MOV R2,#0FH
+	MOV R3,#0EH
+	
+	;CHANGE INDEX
+
+	INC R1
+	CJNE R1,#6,DISPLAY
+	MOV R1,#1 ;set j=0, i++
+
+	;i++
+	INC R0
+	CJNE R0,#8,CONTINUE_I
+
+	;and finally, if we reach the end
+	;of the matrix (i=j=max)
+	MOV R0,#1 ; set i=0
+	MOV R5,#1
+	AJMP DISPLAY
+
+CONTINUE_I:
+	MOV A,R5
+	RL A
+	MOV R5,A
+	;now, the dot appears lower
+	;the columns keep alternating
+	;as usual
+
+LOOP:
+DISPLAY:	
+	MOV P1,#00H
+
+	;now, we check which column we
+	;are currently in. If this
+	;column matches j, we display R5.
+	;otherwise, the column is empty
+	;all dots are zero
+
+	;P2 = current column in time sharing
+	;R1 = the index of j the dot
+	;sits in
+	MOV A,P2
+	SUBB A,R1
+	CJNE A,#0,EMPTY
+	;ACC=0 after subtraction
+	;so R1=P2 and current column
+	;has a dot
+	MOV A,R5
+	MOV P0,A
+	AJMP CONTINUE
+
+EMPTY:
+	MOV P0,#00H
+
+CONTINUE:
+	MOV P1,R4
+	DEC P2
+
+	MOV A,R4
+	RR A
+	MOV R4,A
+
+	;temp
+	;MOV P0,#12H
+
+	CALL DELAY
+
+	MOV A,P2
+	CJNE A,#0,LOOP
+	MOV R4,#10H
+	MOV P2,#5
+
+	JMP CHECKCHANGE
+
+DELAY:
+	MOV R6,#020H
+DELAY1:
+	MOV R7,#025H
+DELAY2:
+	DJNZ R7,DELAY2
+	DJNZ R6,DELAY1
+RET
+END

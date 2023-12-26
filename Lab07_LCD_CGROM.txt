@@ -1,0 +1,217 @@
+ORG	0000H
+JMP	START
+ORG	0050H
+
+START:
+	;5ms
+	;waiting for the LCD to turn on
+	MOV	R5,#0FAH
+	CALL DELAY
+	
+	;Settings:
+	;8-bit data access
+	;2 columns
+	;5x7 characters
+	MOV	A,#00111011B							
+	CALL COMMAND
+
+	;Turn on the display
+	;no cursor blinking				
+	MOV	A,#00001110B	
+	CALL COMMAND
+	
+	;Clear the screen	
+	MOV	A,#00000001B		
+	CALL COMMAND
+	
+	;2ms delay
+	MOV	R5,#00FFH		
+	CALL DELAY
+
+	;Write data to CG RAM
+	MOV	A,#01000000B		
+	CALL COMMAND
+	ACALL DELAY
+
+	ACALL LOAD_ANIMATION
+
+	;DD RAM address = 0
+	MOV	A,#10000000B		
+	CALL COMMAND
+	ACALL DELAY
+
+LOOP:
+	MOV A,#00000000B ; First character,
+					; loaded to 
+					; CG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL DELAY
+	
+	ACALL LONG_DELAY
+
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay between each face
+	MOV R5,#0FFH
+	CALL DELAY
+
+	MOV A,#00000001B ;second
+				;character stored in 
+				;SG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL DELAY
+	ACALL LONG_DELAY				
+	
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay between each face
+	MOV R5,#0FFH
+	CALL DELAY
+	
+	MOV A,#00000010B ;third
+				;character stored in 
+				;SG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL DELAY
+	ACALL LONG_DELAY				
+	
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay between each face
+	MOV R5,#0FFH
+	CALL DELAY
+	
+	MOV A,#00000011B ;4th
+				;character stored in 
+				;SG RAM
+	CALL SDATA
+	MOV R5,#0FFH
+	ACALL DELAY
+	ACALL LONG_DELAY				
+	
+	MOV A,#00000001B ;clear display
+	CALL COMMAND ;delay >1.64ms	
+	MOV R5,#0AH
+	ACALL DELAY
+	
+	MOV A,#10000000B ;write data
+	CALL COMMAND
+
+	;Short delay between each face
+	MOV R5,#0FFH
+	CALL DELAY	
+
+	JMP	LOOP
+
+COMMAND:	      
+	MOV	P2,A ; Command data			
+	MOV	P1,#00000100B ;E=1,RW=0,RS=0
+	CALL DELAY			
+	MOV	P1,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#2H ; Short delay				
+	CALL DELAY
+	RET
+
+SDATA:		
+	MOV	P2,A
+	MOV	P1,#00000101B ;E=1,RW=0,RS=1
+	CALL DELAY
+	MOV	P1,#00000001B ;E=0,RW=0,RS=1
+	MOV	P1,#00000000B ;E=0,RW=0,RS=0
+	MOV	R5,#0FAH ;5ms
+	MOV	R3,#019H
+WAIT:
+	CALL DELAY
+	DJNZ R3,WAIT
+	RET
+
+LONG_DELAY:
+	MOV R2,#07H
+LONG:
+	MOV	R3,#02FH
+	CALL WAIT
+	DJNZ R2,LONG
+	RET	
+
+DELAY:
+	MOV	R6,#02H
+DELAY1:
+	MOV	R7,#05H
+DELAY2:
+	DJNZ	R7,DELAY2
+	DJNZ	R6,DELAY1
+	DJNZ	R5,DELAY
+	RET
+
+;load animation to RAM
+LOAD_ANIMATION:
+ 	MOV DPTR,#ANIMATION
+	MOV R0,#32
+LOAD_ANIMATION1:
+	CLR A
+	MOVC A,@A+DPTR
+	CALL SDATA
+	MOV R5,#05FH
+	CALL DELAY
+	INC DPTR
+	DJNZ R0,LOAD_ANIMATION1
+RET
+
+ANIMATION:
+		DB	00000B
+		DB	01010B
+		DB	01010B
+		DB	00000B
+		DB	00000B
+		DB	01110B
+		DB	10001B
+		DB	10001B
+	
+ 		DB	00000B
+		DB	01010B
+		DB	01010B
+		DB	00000B
+		DB	00000B
+		DB	11111B
+		DB	00000B
+		DB	00000B
+
+ 		DB	00000B
+		DB	00000B
+		DB	11011B
+		DB	00000B
+		DB	00000B
+		DB	10001B
+		DB	01110B
+		DB	00000B
+
+		DB	00000B
+		DB	00000B
+		DB	01010B
+		DB	01010B
+		DB	00000B
+		DB	00001B
+		DB	00110B
+		DB	01000B
+END

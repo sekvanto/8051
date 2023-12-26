@@ -1,0 +1,195 @@
+ORG 0000H
+AJMP MAIN
+ORG 0050H
+
+MAIN:
+; ROW is R2
+MOV P3,#0F7H ; 7-segment display choose
+MOV R1,#0 ; Indicates whether we 
+	; currently display 2 digits or
+	; one digit, if one, R1 = 0,
+	; if two, R1 = 1
+
+START:
+	MOV P0,#0	;LED
+LOOP1:
+	MOV P1,#11111110B
+	MOV R2,#0 ;ROW
+NEXT1:
+	MOV A,P2	; Scan the keyboard
+	ANL	A,#0FH	; Get bits 0-3
+	CJNE A,#0FH,OUT1 ; If press
+					 ; detected, jump
+	; Nothing detected:
+	MOV P0,#0FFH  ; Blank display
+
+	MOV	A,P1	; Rotate scanning
+				; output
+	RL	A
+	MOV	P1,A
+	INC	R2		; Increment row
+				; after rotating
+	CJNE R2,#4,NEXT1
+
+	SJMP LOOP1
+
+; Press detected during the scan
+OUT1:
+	ACALL DELAY
+	MOV	A,P2
+	ANL	A,#0FH	; Get lower 4 bits
+	CJNE A,#0FH,OUT2 ; If press
+					 ; detected, jump
+
+	SJMP LOOP1
+
+; Process keyboard press
+OUT2:
+	MOV	DPTR,#IDXCOL ; Index table
+	MOVC A,@A+DPTR
+	MOV B,A	; Copy ACC to BCC
+	MOV A,R2 ; Copy ROW to ACC
+	CLR C ; Clear carry
+	RLC A ; Rotate left accumulator
+	CLR C ; Clear carry
+	RLC A ; After 2x rotating the row:
+	ADD A,B	; Add bcc to acc
+
+	; ACC has the index we calculated	
+	MOV R3,A ;Save it in R3	
+
+	; Check whether it's >= 10
+	MOV B,A ; Copy ACC to BCC
+	ADDC A,#244 ; Add 244, carry set or not
+	; Max ACC = 255, 12+244 = overflow
+	JC TWO_DIGITS ; If carry set
+
+	; And also jump to two_digits
+	; if ACC = 253 or 252
+	; for 10 and 11
+	CJNE A,#0FDH,D1CHECK2
+	MOV R1,#1
+	AJMP TWO_DIGITS
+D1CHECK2:
+	CJNE A,#0FCH,ONLY_ONE_DIGIT
+	MOV R1,#1
+	AJMP TWO_DIGITS
+
+ONLY_ONE_DIGIT:
+	; Carry not set, we display only
+	; one digit
+	MOV R1,#0 ; indicates one digit	
+
+	MOV P3,#0F7H
+	MOV A,B
+	MOV DPTR,#SSTABLE
+	MOVC A,@A+DPTR
+	MOV P0,A ; Display
+	AJMP LOOP2
+
+TWO_DIGITS:
+	CLR C ; Clear carry
+	MOV A,B
+
+	MOV R1,#1 ; Indicates 2 digits
+
+	; Now, we have to alternate
+	; between two digits
+	MOV R0,#0 ; 0 = display "1"
+		; 1 = display second digit
+
+TWO_DIGITS_LOOP:
+	CJNE R0,#0,SECOND_DIGIT
+	; R0 = 0, display "1"
+	MOV P3, #0FFH
+	MOV P0, #10011111B ; "1"
+	MOV P3, #0FBH ; Left digit
+	MOV R0, #1
+	AJMP LOOP2
+
+SECOND_DIGIT:
+	MOV P3, #0FFH
+	MOV A,R3
+	MOV DPTR,#SSTABLE
+	MOVC A,@A+DPTR
+	MOV P0,A ; Display	
+	MOV P3, #0F7H
+	MOV R0, #0
+
+LOOP2:
+	MOV A,P2
+	ANL A,#0FH
+	
+	CJNE R1,#1,ONED
+	CJNE A,#0FH,TWO_DIGITS_LOOP
+	AJMP CALL_DELAY
+
+ONED:
+	CJNE A,#0FH,LOOP2 ; No press,
+				; Stay in this loop
+CALL_DELAY:
+	ACALL DELAY	; Press not detected,
+				; wait
+
+	MOV A,P2
+	ANL A,#0FH	; Check again
+
+ 	CJNE R1,#1,ONED1
+	CJNE A,#0FH,TWO_DIGITS_LOOP
+	AJMP LOOP1
+
+ONED1:
+	CJNE A,#0FH,LOOP2
+
+	AJMP LOOP1 ; Back to loop 1
+
+; P2: four bits
+; IDXCOL: returns position of the
+; first rightmost 0
+IDXCOL:
+	DB	0	; 000(0)
+	DB	1	; 00(0)1
+	DB	0	; 001(0)
+	DB	2	; 0(0)11
+	DB	0	; 010(0)
+	DB	1	; 01(0)1
+	DB	0	; 011(0)
+	DB	3	; (0)111
+	DB	0	; 100(0)
+	DB	1	; 10(0)1
+	DB	0	; 101(0)
+	DB	2	; 1(0)11
+	DB	0	; 110(0)
+	DB	1	; 11(0)1
+	DB	0	; 111(0)
+
+SSTABLE:
+	DB	00001101B	;3
+	DB	00100101B	;2
+	DB	10011111B	;1
+	DB	00000011B	;0
+
+	DB	00011111B	;7
+	DB	01000001B	;6
+	DB	01001001B	;5
+	DB	10011001B	;4
+					 
+	DB	10011111B	;1
+	DB	00000011B	;0
+	DB	00001001B   ;9
+	DB	00000001B	;8
+					  
+	DB	01001001B	;5
+	DB	10011001B	;4
+	DB	00001101B	;3
+	DB	00100101B	;2
+
+DELAY:
+	MOV R6,#03H
+DELAY1:
+	MOV R7,#03H
+DELAY2:
+	DJNZ R7,DELAY2
+	DJNZ R6,DELAY1
+RET
+END
